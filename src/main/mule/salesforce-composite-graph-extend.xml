@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:java="http://www.mulesoft.org/schema/mule/java" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:salesforce-composite="http://www.mulesoft.org/schema/mule/salesforce-composite" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/salesforce-composite http://www.mulesoft.org/schema/mule/salesforce-composite/current/mule-salesforce-composite.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/java http://www.mulesoft.org/schema/mule/java/current/mule-java.xsd">
+
+	<flow name="salesforce-composite-graph-http-flow" doc:id="46da2236-c593-4445-a7cc-86e2de097926">
+		<http:listener doc:name="Listener" doc:id="cf301b7f-0f21-447b-9de2-76e29b8235ef" config-ref="HTTP_Listener_config" path="/composite-graph-request" />
+		<flow-ref doc:name="salesforce-composite-extend-flow" doc:id="d52a8873-c2b7-4999-ba4b-67e1b37cb6bb" name="salesforce-composite-extend-flow" />
+	</flow>
+	<flow name="salesforce-composite-graph-extend-flow" doc:id="1c2ec97f-c0d1-4bad-a37c-af41dae70214">
+		<set-variable value="#[[]]" doc:name="results" doc:id="c8b3ef51-b904-4623-9296-a0a2a2f6720c" variableName="results" />
+		<set-variable value="#[{}]" doc:name="refs" doc:id="b5091d6d-ccd3-4528-a28b-a1c1b3ec9acd" variableName="refs" />
+		<set-variable value="#[[]]" doc:name="rollbackIds" doc:id="f7ff9404-9319-45bb-a4cb-2d4e0227acb8" variableName="rollbackIds" />
+		<foreach doc:name="For Each" doc:id="ec69c1cc-218c-493b-9a41-41e0fdd1da69" collection="#[read(payload,'application/json').graphs]">
+			<ee:transform doc:name="Sleep" doc:id="667880bf-96ae-4cf6-902b-0297ee08dd39">
+				<ee:message>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="sleep"><![CDATA[%dw 2.0
+import * from dw::Runtime
+output application/json
+---
+{ "sleep" : payload.sleepTimeBeforeExecuting} wait (payload.sleepTimeBeforeExecuting default 0) as Number]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<ee:transform doc:name="compositeGraphRequest" doc:id="4f4a7d99-3274-43c4-9093-4fa0c1be3558" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+[ payload - 'sleepTimeBeforeExecuting' ] ]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<logger level="INFO" doc:name="Number of calls" doc:id="47dd2f59-9cec-4764-990e-fda2b08bce4a" message="Number of calls in Composite Grapsh #[sizeOf(payload..url)]"/>
+			<java:invoke-static doc:name="payloadReplacer" doc:id="ca8ff7fd-9be1-4573-a537-e9bc19e26373" class="com.varelma.utils.CompositeRequestReplacer" method="transform(java.lang.String,java.lang.Object)" outputMimeType="application/json">
+			<java:args><![CDATA[#[%dw 2.0
+import * from dw::Runtime
+output application/java
+---
+{
+	payload:payload,
+	vars: vars
+}]]]></java:args>
+		</java:invoke-static>
+			<logger level="INFO" doc:name="Composite Graph Call " doc:id="f5162268-324d-4e41-b173-7a04814acc22" message="Composite Graph Call payload: #[payload]"/>
+			<salesforce-composite:execute-composite-graph doc:name="Execute composite graph" doc:id="4de3ad56-8c92-4f73-9474-cd21add4dac4" config-ref="Salesforce_Composite_Config"/>
+			<choice doc:name="Choice" doc:id="74b279ab-20c2-47a2-b9b2-681cc8a92183">
+			<when expression="#[((payload..httpStatusCode map((item, index) -&gt;  (item ==200 or item == 201) )) contains false)]">
+				<logger level="INFO" doc:name="Logger" doc:id="ff8e433e-5dca-4a0a-96f1-37a4f4a003dc" message="Composite request failed response was: #[payload]" />
+				<raise-error doc:name="Raise error" doc:id="6d2a5f85-5d9b-43c3-9e9f-ce016485584d" type="SALEFORCE:REQUEST_ERROR" description="SALEFORCE:REQUEST_ERROR" />
+			</when>
+				<otherwise >
+					<logger level="INFO" doc:name="Logger" doc:id="2c0ea1b1-5390-4a5f-b564-a35e3b6a6828" message="Composite response payload #[payload]"/>
+				</otherwise>
+		</choice>
+			<ee:transform doc:name="results" doc:id="19feab94-518f-427f-a3c2-6874cca26ef1">
+
+				<ee:variables>
+					<ee:set-variable variableName="results"><![CDATA[%dw 2.0
+output application/java
+---
+vars.results <<  payload..compositeResponse]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<ee:transform doc:name="rollbackIds" doc:id="46ba80f5-80c3-4d8f-b81e-48384a63275a">
+				<ee:variables>
+					<ee:set-variable variableName="rollbackIds"><![CDATA[%dw 2.0
+output application/java
+---
+vars.rollbackIds <<  [payload..id]]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<ee:transform doc:name="compositeResponse array" doc:id="cc025851-e945-4f66-ad6e-56172cf909b4" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+flatten(payload..compositeResponse)]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<foreach doc:name="For Each" doc:id="222c282b-1314-4a51-82a5-953578f8e42a" collection="payload">
+				<ee:transform doc:name="Store result in vars.refs" doc:id="b19c6ca6-f2e5-4802-a8cd-1dbf0c473b7b">
+						<ee:variables>
+							<ee:set-variable variableName="refs"><![CDATA[%dw 2.0
+output application/java
+---
+{(payload.referenceId): payload.body.id } ++ vars.refs]]></ee:set-variable>
+						</ee:variables>
+					</ee:transform>
+		</foreach>
+
+		</foreach>
+		<ee:transform doc:name="payload" doc:id="6e20131b-8920-428b-89a6-0cff6d64df1c">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+   "compositeResponse" : flatten(vars.results)
+} ]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<flow-ref doc:name="salesforce-composite-extend-cleanup-sub-flow" doc:id="518dd17d-6d4d-4bad-93e7-96b42f330d35" name="salesforce-composite-extend-cleanup-sub-flow"/>
+		<error-handler>
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="f2a26169-f2cd-4d2d-a7bd-1d47f7376797" type="ANY">
+				<ee:transform doc:name="payload" doc:id="649ebb4a-ad32-4425-964a-5f57c8ce3099">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<logger level="ERROR" doc:name="log error" doc:id="0f1f7de1-e696-4b22-b697-0ec79e1ac2fd" message="ERROR SENDING TO SALEFORCE RESPONSE WAS #[payload]"/>
+				<set-variable value="#[payload.compositeResponse[0].httpStatusCode]" doc:name="Set Variable" doc:id="7010989a-2576-41d7-8466-0921ff4b0ed7" variableName="httpStatus" />
+				<flow-ref doc:name="salesforce-composite-graph-extend-rollbackId-flow" doc:id="1d082a20-256d-490a-96ea-282f9ff07423" name="salesforce-composite-graph-extend-rollbackId-flow"/>
+				<raise-error doc:name="Raise error" doc:id="0807f7ed-202f-478e-bc93-b9cf0d357529" type="ANY" description="An error occoured in salesforce-composite-graph-extend-flow"/>
+			</on-error-continue>
+		</error-handler>
+	</flow>
+	<sub-flow name="salesforce-composite-graph-extend-cleanup-sub-flow" doc:id="f50f0b63-f2c3-45f9-97c3-521b36e17947" >
+		<remove-variable doc:name="results" doc:id="c4ba7a22-7b4d-4372-8e10-6fcc929fc827" variableName="results" />
+		<remove-variable doc:name="refs" doc:id="75602fb1-5719-4b83-9bdb-2252098e77b6" variableName="refs" />
+	</sub-flow>
+	<flow name="salesforce-composite-graph-extend-rollbackId-flow" doc:id="1af018ce-7189-4304-955f-c1e224f7f70f" >
+
+				<ee:transform doc:name="Sleep" doc:id="35c72991-26a8-4b78-a358-b013d83a761c">
+				<ee:message>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="sleep"><![CDATA[%dw 2.0
+import * from dw::Runtime
+output application/json
+---
+{ "sleep" : 20000} wait 20000 ]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+
+
+
+		<ee:transform doc:name="rollbackIds reverse" doc:id="45abdb40-6289-40ef-b599-4575f0a93fed">
+					<ee:message>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="rollbackIds"><![CDATA[%dw 2.0
+output application/java
+---
+vars.rollbackIds[-1 to 0]
+]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+		<foreach doc:name="For Each" doc:id="52e6511d-88ec-4e1e-a303-356b8b05c91b" collection="vars.rollbackIds">
+					<choice doc:name="Choice" doc:id="1aaa2aa0-c1b8-4227-bb75-fdf7727a5b66" >
+				<when expression="#[payload[0] != null]">
+					<salesforce-composite:delete-sobject-collections doc:name="Delete sobject collections" doc:id="8f321094-315c-4fdb-9dfc-5e7db09606d3" config-ref="Salesforce_Composite_Config" ids="#[payload[0]]" />
+				</when>
+			</choice>
+				</foreach>
+		<ee:transform doc:name="rollbackIds json" doc:id="770b76bd-0d24-4015-bfb5-f2587d91c532" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="logPayload" ><![CDATA[%dw 2.0
+output application/json
+---
+vars.rollbackIds]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="278ba874-1549-4170-9703-e332f74e36ca" message="Salesforce rollback complete rollbackIds: #[vars.logPayload]"/>
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="9fd5b106-55db-41ae-99d9-ce15d84fccda" when="ANY">
+				<logger level="INFO" doc:name="Logger" doc:id="c599a34d-352b-4f4f-8251-a47b45814c78" message="Error during rollback #[error]"/>
+			</on-error-continue>
+		</error-handler>
+	</flow>
+</mule>

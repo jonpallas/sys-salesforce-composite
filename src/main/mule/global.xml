@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule
+	xmlns:wsc="http://www.mulesoft.org/schema/mule/wsc"
+	xmlns:outlook365="http://www.mulesoft.org/schema/mule/outlook365"
+	xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce"
+	xmlns:salesforce-composite="http://www.mulesoft.org/schema/mule/salesforce-composite"
+	xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns:salesforce-pub-sub="http://www.mulesoft.org/schema/mule/salesforce-pub-sub"
+	xmlns:anypoint-mq="http://www.mulesoft.org/schema/mule/anypoint-mq"
+	xmlns:api-gateway="http://www.mulesoft.org/schema/mule/api-gateway"
+	xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd
+http://www.mulesoft.org/schema/mule/api-gateway http://www.mulesoft.org/schema/mule/api-gateway/current/mule-api-gateway.xsd
+http://www.mulesoft.org/schema/mule/anypoint-mq http://www.mulesoft.org/schema/mule/anypoint-mq/current/mule-anypoint-mq.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/salesforce-composite http://www.mulesoft.org/schema/mule/salesforce-composite/current/mule-salesforce-composite.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/wsc http://www.mulesoft.org/schema/mule/wsc/current/mule-wsc.xsd">
+	<configuration-properties
+		doc:name="Configuration properties"
+		doc:id="09052658-8b12-481d-b288-447c65dffff9"
+		file="properties/common.properties" />
+
+	<global-property doc:name="Global Property"
+		doc:id="06169326-ec21-4e0a-8a05-fa76484e44aa" name="env"
+		value="Development" />
+	<global-property doc:name="Global Property"
+		doc:id="5d71508b-f095-4922-897f-32a1939a649e" name="secure.key"
+		value="passwordpassword" />
+
+	<secure-properties:config
+		name="Secure_Properties_Config_Common"
+		doc:name="Secure Properties Config"
+		doc:id="5e4b0b6d-7307-423c-be2d-40641af1c995"
+		file="properties/common.properties" key="${secure.key}" />
+	<secure-properties:config
+		name="Secure_Properties_Config_Env"
+		doc:name="Secure Properties Config"
+		doc:id="119f800c-28df-4566-b212-7087e86cc4c5"
+		file="properties/${env}.properties" key="${secure.key}" />
+
+
+	<configuration-properties
+		doc:name="Configuration properties Env"
+		doc:id="1c0bffe8-2be6-4f3a-85ec-7532f11dc56a"
+		file="properties/${env}.properties" />
+
+
+	<anypoint-mq:config name="Anypoint_MQ_Config"
+		doc:name="Anypoint MQ Config"
+		doc:id="f9a0fa79-85c3-4404-a0c8-eeb4bcf0d000">
+		<anypoint-mq:connection url="${mq.url}"
+			clientId="${mq.clientAppId}"
+			clientSecret="${secure::mq.clientSecret}" />
+	</anypoint-mq:config>
+
+	<os:object-store name="Object_store" doc:name="Object store" doc:id="5457b322-2a96-4e39-8904-b930b69c66f0" persistent="false" />
+
+	<salesforce-composite:composite-config
+		name="Salesforce_Composite_Config"
+		doc:name="Salesforce Composite Config"
+		doc:id="d43164b8-28e0-4e06-9931-9bb33d6e9836">
+		<salesforce-composite:oauth-jwt-connection
+		consumerKey="${secure::salesforce.consumerKey}"
+		keyStore="${salesforce.keyStore}"
+		storePassword="${secure::salesforce.storePassword}"
+		certificateAlias="${salesforce.certificateAlias}"
+		principal="${salesforce.principal}"
+		tokenEndpoint="${salesforce.tokenEndpoint}" responseTimeout="120" connectionTimeout="120"/>
+	</salesforce-composite:composite-config>
+
+	<salesforce:sfdc-config name="Salesforce_Config" doc:name="Salesforce Config" doc:id="33849bad-94f6-42df-b856-a4a40fe6d975" fetchAllApexRestMetadata="true" fetchAllApexSoapMetadata="true">
+    <salesforce:jwt-connection
+		consumerKey="${secure::salesforce.consumerKey}"
+		keyStore="${salesforce.keyStore}"
+		storePassword="${secure::salesforce.storePassword}"
+		certificateAlias="${salesforce.certificateAlias}"
+		principal="${salesforce.principal}"
+		tokenEndpoint="${salesforce.tokenEndpoint}"/>
+
+	</salesforce:sfdc-config>
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="83c160db-5247-4a43-85fd-a962c84f83fd" >
+		<http:request-connection protocol="HTTPS" host="host" port="443" />
+	</http:request-config>
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="f7264e2e-f09e-40db-9c55-0a649b4c4418" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+
+</mule>
