@@ -27,8 +27,28 @@ payload.compositeRequest]]></ee:set-payload>
 		<set-variable value="#[{}]" doc:name="refs" doc:id="b5091d6d-ccd3-4528-a28b-a1c1b3ec9acd" variableName="refs" />
 		<set-variable value="#[0]" doc:name="getsCount" doc:id="12eb4052-300d-484b-9b93-bd5959530715" variableName="getsCount" />
 		<set-variable value="#[0]" doc:name="nonGetsCount" doc:id="9571c27d-b569-41fd-8a5b-711f68f41279" variableName="nonGetsCount" />
+		<set-variable value="#[[]]" doc:name="rollbackIds" doc:id="d6efe749-b3a3-4d11-8097-0f242c0c5de7" variableName="rollbackIds" />
 		<foreach doc:name="For Each" doc:id="ec69c1cc-218c-493b-9a41-41e0fdd1da69">
 
+			<ee:transform doc:name="Sleep" doc:id="f64324dd-7134-4a9a-a0ad-70bf4ad1cbec">
+				<ee:message>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="sleep"><![CDATA[%dw 2.0
+import * from dw::Runtime
+output application/json
+---
+{ "sleep" : "sleep" } wait (payload.sleepTimeBeforeExecuting default 0) as Number]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<ee:transform doc:name="compositeRequest" doc:id="d5fa0065-5756-4913-9d5e-68261429b527">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+[ payload - 'sleepTimeBeforeExecuting' ] ]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
 			<ee:transform doc:name="method" doc:id="268f6625-e666-4cd2-994a-662bd15f290c">
 
 				<ee:variables>
@@ -104,7 +124,8 @@ output application/json
 } ]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
-		<flow-ref doc:name="salesforce-composite-extend-cleanup-sub-flow" doc:id="518dd17d-6d4d-4bad-93e7-96b42f330d35" name="salesforce-composite-extend-cleanup-sub-flow"/>
+		<flow-ref doc:name="salesforce-composite-extend-cleanup-sub-flow" doc:id="518dd17d-6d4d-4bad-93e7-96b42f330d35" name="salesforce-composite-extend-cleanup-sub-flow" />
+
 		<error-handler>
 			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="f2a26169-f2cd-4d2d-a7bd-1d47f7376797" type="ANY">
 				<ee:transform doc:name="payload" doc:id="649ebb4a-ad32-4425-964a-5f57c8ce3099">
@@ -115,12 +136,20 @@ output application/json
 payload]]></ee:set-payload>
 					</ee:message>
 				</ee:transform>
-				<set-variable value="#[payload.compositeResponse[0].httpStatusCode]" doc:name="Set Variable" doc:id="7010989a-2576-41d7-8466-0921ff4b0ed7" variableName="httpStatus" />
+
+				<logger level="ERROR" doc:name="log error" doc:id="67d110b3-f29f-42f9-b6f8-ea9699610c18" message="ERROR SENDING TO SALEFORCE RESPONSE WAS #[payload]" />
+				<set-variable value="#[payload.compositeResponse[0].httpStatusCode]" doc:name="Set Variable" doc:id="942d2c3d-3c02-4472-9631-284d71d10d77" variableName="httpStatus" />
+				<flow-ref doc:name="salesforce-composite-extend-rollbackId-flow" doc:id="b8d1c261-2338-4cad-9b18-ac2ecd52a3dd" name="salesforce-composite-graph-extend-rollbackId-flow" />
+				<raise-error doc:name="Raise error" doc:id="b7434567-9b59-4006-93a0-e101353a5e67" type="ANY" description="An error occoured in salesforce-composite-graph-extend-flow" />
+
+
 			</on-error-continue>
 		</error-handler>
+
+
 	</flow>
-	<sub-flow name="salesforce-composite-extend-cleanup-sub-flow" doc:id="f50f0b63-f2c3-45f9-97c3-521b36e17947" >
-		<remove-variable doc:name="records" doc:id="8afa8f1c-32f8-447f-8ebb-404ebf751f1b" variableName="records"/>
+	<sub-flow name="salesforce-composite-extend-cleanup-sub-flow" doc:id="f50f0b63-f2c3-45f9-97c3-521b36e17947">
+		<remove-variable doc:name="records" doc:id="8afa8f1c-32f8-447f-8ebb-404ebf751f1b" variableName="records" />
 		<remove-variable doc:name="results" doc:id="c4ba7a22-7b4d-4372-8e10-6fcc929fc827" variableName="results" />
 		<remove-variable doc:name="methods" doc:id="5e090468-a467-4e9b-b63d-0a185afd1629" variableName="methods" />
 		<remove-variable doc:name="method" doc:id="885f78bf-2249-4fe0-bae1-aa12d1f33422" variableName="method" />
@@ -152,9 +181,9 @@ output application/java
 	vars: vars
 }]]]></java:args>
 		</java:invoke-static>
-		<logger level="INFO" doc:name="Logger" doc:id="d0321511-64e5-4fca-9ff9-b53849539c85" message="Composite called with : #[payload]"/>
+		<logger level="INFO" doc:name="Logger" doc:id="d0321511-64e5-4fca-9ff9-b53849539c85" message="Composite called with : #[payload]" />
 		<salesforce-composite:execute-composite-request doc:name="Execute composite request" doc:id="e1ca75a2-64ae-4839-bd97-0757a31632bc" config-ref="Salesforce_Composite_Config" />
-		<ee:transform doc:name="records" doc:id="7b1d58ce-fc22-4653-8ae1-69e7008c45db">
+		<ee:transform doc:name="results" doc:id="7b1d58ce-fc22-4653-8ae1-69e7008c45db">
 			<ee:variables>
 				<ee:set-variable variableName="results"><![CDATA[%dw 2.0
 output application/java
@@ -162,7 +191,14 @@ output application/java
 (vars.results default []) <<  (payload.compositeResponse default [])]]></ee:set-variable>
 			</ee:variables>
 		</ee:transform>
-
+		<ee:transform doc:name="rollbackIds" doc:id="b6d4111f-4d9c-40f6-887d-804f65f52c9f">
+			<ee:variables>
+				<ee:set-variable variableName="rollbackIds"><![CDATA[%dw 2.0
+output application/java
+---
+vars.rollbackIds <<  [payload..id]]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
 		<choice doc:name="Choice" doc:id="bf55e849-364a-441e-8e42-c72143ded1be">
 			<when expression="#[((payload.compositeResponse..httpStatusCode map((item, index) -&gt;  (item ==200 or item == 201) )) contains false)]">
 				<logger level="INFO" doc:name="Logger" doc:id="89073ef0-7617-4afd-8a6d-93556cd12ba1" message="Composite request failed response was: #[payload]" />
@@ -171,7 +207,7 @@ output application/java
 		</choice>
 		<foreach doc:name="For Each" doc:id="a3c8436d-447c-4f3c-8b86-52d44b229efd" collection="payload.compositeResponse">
 			<choice doc:name="Choice1" doc:id="95602f40-cb21-4615-84cf-5e709dff7b4b">
-			<when expression="#[vars.methods[vars.counter] == 'GET']">
+				<when expression="#[vars.methods[vars.counter] == 'GET']">
 					<ee:transform doc:name="Store result in vars.refs" doc:id="904faea8-3b3f-4854-9419-e54a78b6181f">
 						<ee:variables>
 							<ee:set-variable variableName="refs"><![CDATA[%dw 2.0
@@ -190,8 +226,60 @@ output application/java
 {(payload.referenceId): payload.body.id } ++ vars.refs]]></ee:set-variable>
 						</ee:variables>
 					</ee:transform>
-			</otherwise>
-		</choice>
+				</otherwise>
+			</choice>
 		</foreach>
 	</sub-flow>
+
+	<flow name="salesforce-composite-extend-rollbackId-flow" doc:id="deb0616c-c186-458a-87e4-42e5140ebe3d">
+
+		<ee:transform doc:name="Sleep" doc:id="0159dc68-d7d0-4518-82fc-5794cfd533a5">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="sleep"><![CDATA[%dw 2.0
+import * from dw::Runtime
+output application/json
+---
+{ "sleep" : 20000} wait 20000 ]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+
+
+
+		<ee:transform doc:name="rollbackIds reverse" doc:id="1638a5ba-ac87-4b92-85a3-42bf4c8004b2">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="rollbackIds"><![CDATA[%dw 2.0
+output application/java
+---
+vars.rollbackIds[-1 to 0]
+]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<foreach doc:name="For Each" doc:id="e5b12553-09ec-4828-8578-4a037eb2542f" collection="vars.rollbackIds">
+			<choice doc:name="Choice" doc:id="03c936c5-ec87-4ebb-ad97-abec6cb9fe15">
+				<when expression="#[payload[0] != null]">
+					<salesforce-composite:delete-sobject-collections doc:name="Delete sobject collections" doc:id="f62efc0f-7cd3-4f04-9ec4-040d36abfc22" config-ref="Salesforce_Composite_Config" ids="#[payload[0]]" />
+				</when>
+			</choice>
+		</foreach>
+		<ee:transform doc:name="rollbackIds json" doc:id="6bb26a52-b875-487d-9803-d0f5fafa0ce3">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="logPayload"><![CDATA[%dw 2.0
+output application/json
+---
+vars.rollbackIds]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="1cca020e-1277-4e39-b80f-decffe2ebdea" message="Salesforce rollback complete rollbackIds: #[vars.logPayload]" />
+		<error-handler>
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="cd4af198-7b0d-47ff-a01c-83b0f74914ee" when="ANY">
+				<logger level="INFO" doc:name="Logger" doc:id="621caf13-be69-4553-94f8-19e29c71227f" message="Error during rollback #[error]" />
+			</on-error-continue>
+		</error-handler>
+	</flow>
 </mule>
